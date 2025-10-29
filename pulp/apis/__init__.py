@@ -14,6 +14,7 @@ from .sas_api import SAS94, SASCAS, SASsolver
 from .scip_api import SCIP, SCIP_CMD, SCIP_PY, FSCIP_CMD, FSCIP
 from .xpress_api import XPRESS_CMD, XPRESS_PY, XPRESS
 from .cuopt_api import CUOPT
+from .knitro_api import Knitro
 
 _all_solvers: List[Type[LpSolver]] = [
     CYLP,
@@ -43,6 +44,7 @@ _all_solvers: List[Type[LpSolver]] = [
     SAS94,
     SASCAS,
     CUOPT,
+    Knitro,
 ]
 
 LpSolverDefault: Optional[Union[PULP_CBC_CMD, GLPK_CMD, COIN_CMD]] = None
