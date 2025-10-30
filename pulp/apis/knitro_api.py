@@ -46,8 +46,8 @@ class Knitro(LpSolver):
             :param float timeLimit: maximum time for solver (in seconds)
             :param float gapRel: relative gap tolerance for the solver to stop (in fraction)
             :param bool warmStart: if True, the solver will use the current value of variables as a start
-            :param str logPath: path to the log file            :param dict envOptions: environment options.
-
+            :param bool printKnitroOutput: if True, the solver will print the Knitro output to the console
+            :param bool logFile: if True, the solver will create a log file "knitro.log" with the Knitro output 
 
             
             """
@@ -117,7 +117,8 @@ class Knitro(LpSolver):
                         count += 1
                     count = 0
                     for var in lp._variables:
-                        var.dj = dj[count]
+                        if count < len(dj):
+                            var.dj = dj[count]
                         count += 1
             return status
 
@@ -152,13 +153,15 @@ class Knitro(LpSolver):
             if lp.sense == constants.LpMaximize:
                 kn.KN_set_obj_goal(lp.solverModel, kn.KN_OBJGOAL_MAXIMIZE)
             if self.timeLimit:
+                # set the time limit
                 kn.KN_set_double_param(lp.solverModel, kn.KN_PARAM_MAXTIME, self.timeLimit)
-                self.model.KN_PARAM_MAXTIME = self.timeLimit
             gapRel = self.optionsDict.get("gapRel")
             logFile = self.optionsDict.get("logFile")
             printKnitroOutput = self.optionsDict.get("printKnitroOutput")
             if gapRel:
+                # set the relative gap tolerance
                 kn.KN_set_double_param(lp.solverModel, kn.KN_PARAM_MIP_OPTGAPREL,gapRel)
+            # Here, depending on the options, we set the output mode of Knitro
             if logFile and printKnitroOutput:
                 kn.KN_set_int_param(lp.solverModel, kn.KN_PARAM_OUTMODE,kn.KN_OUTMODE_BOTH)
             elif logFile:
@@ -174,8 +177,11 @@ class Knitro(LpSolver):
             vars_types = []
             var_dict = {}
             count=0
+            # Here we add the variables to the Knitro model
             for var in lp.variables():
+                # store the variable index in a dictionary
                 var_dict[var.name] = count
+                # get the variable bounds and type
                 lowBound = var.lowBound
                 if lowBound is None:
                     lowBound = -kn.KN_INFINITY
@@ -185,7 +191,7 @@ class Knitro(LpSolver):
                 varType = kn.KN_VARTYPE_CONTINUOUS
                 if var.cat == constants.LpInteger and self.mip:
                     varType = kn.KN_VARTYPE_INTEGER
-                # only add variable once, ow new variable will be created.
+                # append to the variable bounds and the type to the lists
                 vars_low_bounds.append(lowBound)
                 vars_up_bounds.append(upBound)
                 vars_types.append(varType)
@@ -205,9 +211,9 @@ class Knitro(LpSolver):
             count=0
             kn.KN_add_cons(lp.solverModel, ncons)
             for name, constraint in lp.constraints.items():
-                # build the expression
-                constraint_val=list(constraint.values())
+                # get the variables in the constraint
                 solvevar=[v for v in constraint.keys()]
+                # set the constraint bounds
                 if constraint.sense == constants.LpConstraintLE:
                     kn.KN_set_con_upbnds(lp.solverModel, count,-constraint.constant)
 
@@ -228,6 +234,7 @@ class Knitro(LpSolver):
             for var in lp.objective.keys():
                 obj_indices.append(var_dict[var.name])
                 obj_coefs.append(lp.objective[var])
+            # set the objective coefficients
             kn.KN_add_obj_linear_struct(lp.solverModel, obj_indices, obj_coefs)
 
 
@@ -238,8 +245,8 @@ class Knitro(LpSolver):
             creates a Knitro model, variables and constraints and attaches
             them to the lp model which it then solves
             """
+            # build the knitro model
             self.buildSolverModel(lp)
-            # set the initial solution
             log.debug("Solve the Model using Knitro")
             self.callSolver(lp, callback=callback)
             # get the solution information
@@ -258,6 +265,7 @@ class Knitro(LpSolver):
             """
             log.debug("Resolve the Model using Knitro")
             cont = 0
+            # update only the modified constraints
             for constraint in lp.constraints.values():
                 if constraint.modified:
                     if constraint.sense == constants.LpConstraintLE:
@@ -266,6 +274,8 @@ class Knitro(LpSolver):
                         kn.KN_set_con_lobnds(lp.solverModel, cont, -constraint.constant)
                     elif constraint.sense == constants.LpConstraintEQ:
                         kn.KN_set_con_eqbnds(lp.solverModel, cont, -constraint.constant)
+                cont += 1
+            # call the solver
             self.callSolver(lp, callback=callback)
             # get the solution information
             solutionStatus = self.findSolutionValues(lp)
